@@ -62,7 +62,6 @@ This is version 1.2 of the Workflow Description Language (WDL) specification. It
     - [Private Declarations](#private-declarations)
     - [Command Section](#command-section)
       - [Expression Placeholders](#expression-placeholders)
-      - [Stripping Leading Whitespace](#stripping-leading-whitespace)
     - [Task Outputs](#task-outputs)
       - [Files and Optional Outputs](#files-and-optional-outputs)
     - [Evaluation of Task Declarations](#evaluation-of-task-declarations)
@@ -371,12 +370,12 @@ Strings that begin with `<<<` and end with `>>>` may span multiple lines.
 
 <details>
   <summary>
-  Example: multiline_strings.wdl
+  Example: multiline_strings1.wdl
   
   ```wdl
   version 1.2
 
-  workflow multiline_strings {
+  workflow multiline_strings1 {
     output {
       String s = <<<
         This is a
@@ -397,7 +396,7 @@ Strings that begin with `<<<` and end with `>>>` may span multiple lines.
   
   ```json
   {
-    "multiline_strings.s": "This is a\nmulti-line string!"
+    "multiline_strings1.s": "This is a\nmulti-line string!"
   }
   ```
   </p>
@@ -1323,8 +1322,50 @@ Placeholders may contain other placeholders to any level of nesting, and placeho
 Int i = 3
 Boolean b = true
 # s evaluates to "4", but would be "0" if b were false
-String s = "~{if b then '${1 + i}' else 0}"
+String s = "~{if b then '~{1 + i}' else 0}"
 ```
+
+Placeholders are evaluated in multi-line strings exactly the same as in regular strings. Common leading whitespace is stripped from a multi-line string *before* placeholder expressions are evaluated.
+
+<details>
+  <summary>
+  Example: multiline_string_placeholders.wdl
+  
+  ```wdl
+  version 1.2
+
+  workflow multiline_strings {
+    output {
+      String spaces = "  "
+      String name = "Henry"
+      String company = "Acme"
+      # This string evaluates to: "  Hello Henry,\n  Welcome to Acme!"
+      # The string still has spaces because the placeholders are evaluated after removing the 
+      # common leading whitespace.
+      String multi_line = <<<
+        ~{spaces}Hello ~{name},
+        ~{spaces}Welcome to ~{company}!
+      >>>
+    }
+  }
+  ```
+  </summary>
+  <p>
+  Example input:
+  
+  ```json
+  {}
+  ```
+  
+  Example output:
+  
+  ```json
+  {
+    "multiline_string_placeholders.multi_line": "  Hello Henry,\n  Welcome to Acme!"
+  }
+  ```
+  </p>
+</details>
 
 ##### Expression Placeholder Coercion
 
@@ -1349,9 +1390,44 @@ Boolean is_true5 = "~{3.141 * 1E-10}" == "0.000000"
 Boolean is_true6 = "~{3.141 * 1E10}" == "31410000000.000000"
 ```
 
-Compound types cannot be implicitly converted to strings. To convert an `Array` to a string, use the [`sep`](#-string-sepstring-arraystring) function: `~{sep(",", str_array)}`.
+Compound types cannot be implicitly converted to strings. To convert an `Array` to a string, use the [`sep`](#-string-sepstring-arraystring) function: `~{sep(",", str_array)}`. See the guide on [WDL value serialization](#appendix-a-wdl-value-serialization-and-deserialization) for more details and examples.
 
-If an expression within a placeholder evaluates to `None`, then the placeholder is replaced by the empty string.
+If an expression within a placeholder evaluates to `None`, and either causes the entire placeholder to evaluate to `None` or causes an error, then the placeholder is replaced by the empty string.
+
+<details>
+  <summary>
+  Example: placeholder_none.wdl
+  
+  ```wdl
+  version 1.2
+
+  workflow placeholder_none {
+    output {
+      String? foo = None
+      # The expression in this string results in an error (calling `select_first` on an array 
+      # containing no non-`None` values) and so the placeholder evaluates to the empty string and 
+      # `s` evalutes to: "Foo is "
+      String s = "Foo is ~{select_first([foo])}"
+    }
+  }
+  ```
+  </summary>
+  <p>
+  Example input:
+  
+  ```json
+  {}
+  ```
+  
+  Example output:
+  
+  ```json
+  {
+    "placeholder_none.s": "Foo is "
+  }
+  ```
+  </p>
+</details>
 
 ##### Concatenation of Optional Values
 
@@ -1402,7 +1478,7 @@ python script.py --val=
 The latter case is very likely an error case, and this `--val=` part should be left off if a value for `val` is omitted. To solve this problem, modify the expression inside the template tag as follows:
 
 ```
-python script.py ${"--val=" + val}
+python script.py ~{"--val=" + val}
 ```
  
 #### 🗑 Expression Placeholder Options
@@ -1442,7 +1518,7 @@ task sep_example {
   }
   command <<<
     echo ~{sep(' ', str_array)}
-    echo ${sep(',', quote(int_array))}
+    echo ~{sep(',', quote(int_array))}
   >>>
 }
 ```
@@ -1505,7 +1581,7 @@ task default_example {
     String? s
   }
   command <<<
-    .my_cmd ~{if defined(s) then "--opt ${s}" else "foobar"}"foobar"}
+    .my_cmd ~{if defined(s) then "--opt ~{s}" else "foobar"}"foobar"}
     # OR
     .my_cmd ~{select_first([s, "foobar"])}
   >>>
@@ -1837,7 +1913,7 @@ workflow wf {
 
 ### Command Section
 
-The `command` section is the only required task section. It defines the command template that is evaluated and executed when the task is called. Specifically, the commands are executed after all of the inputs are staged and before the outputs are evaluated.
+The `command` section is the only required task section. It defines the command template that is evaluated and executed when the task is called. The command template is a bash script that may contain placeholder expressions. There may be any number of commands within a command section.
 
 There are two different syntaxes that can be used to define the command section:
 
@@ -1849,13 +1925,75 @@ command <<< ... >>>
 command { ... }
 ```
 
-There may be any number of commands within a command section. Commands are not modified by the execution engine, with the following exceptions:
-- Common leading whitespace is [stripped](#stripping-leading-whitespace)
-- String interpolation is performed on the entire command section to replace [expression placeholders](#expression-placeholders) with their actual values.
+The command template is evaluated *after* all of the inputs are staged and before the outputs are evaluated. The command template is evaluated similarly to [multi-line strings](#multi-line-strings):
+
+1. Remove all whitespace following the opening `<<<`, up to and including a newline (if any).
+2. Remove all whitespace preceeding the closing `>>>`, up to and including a newline (if any).
+3. Use all remaining non-*blank* lines to determine the *common leading whitespace*.
+4. Remove common leading whitespace from each line.
+5. Evaluate placeholder expressions.
+
+Notice that there is one major difference between the evaluation of multi-line strings vs the command template: line continuations are removed in the former but left as-is in the latter. This also means that continued lines are considered when determining common leading whitespace, and that common leading whitespace is removed from continued lines as well.
+
+```wdl
+String s = <<<
+  This string has \
+  no newlines
+>>>
+
+command <<<
+  echo "~{s}"
+  echo "This command has line continuations \
+    that still appear in the Bash script \
+    after evaluation"
+>>>
+```
+
+When the above command template is evaluated the resulting Bash script is:
+
+```sh
+echo "This string has no newlines"
+echo "This command has line continuations \
+  that still appear in the Bash script \
+  after evaluation"
+```
+
+For another example, consider a task that calls the `python` interpreter with an in-line Python script:
+
+```wdl
+task heredoc {
+  input {
+    File infile
+  }
+
+  command <<<
+    python <<CODE
+      with open("~{in}") as fp:
+        for line in fp:
+          if not line.startswith('#'):
+            print(line.strip())
+    CODE
+  >>>
+  ....
+}
+```
+
+Given an `infile` value of `/path/to/file`, the execution engine produces the following Bash script, which has removed the 4 spaces that were common to the beginning of each line:
+
+```sh
+python <<CODE
+  with open("/path/to/file") as fp:
+    for line in fp:
+      if not line.startswith('#'):
+        print(line.strip())
+CODE
+```
+
+Each whitespace character is counted once regardless of whether it is a space or tab, so care should be taken when mixing whitespace characters. For example, if a command block has two lines, and the first line begins with `<space><space><space><space>`, and the second line begins with `<tab>` then only one whitespace character is removed from each line.
 
 #### Expression Placeholders
 
-The body of the command section (i.e. the command "template") can be though of as a single string expression, which (like all string expressions) may contain placeholders.
+The command "template" can be thought of as a single string expression, which (like all string expressions) may contain placeholders.
 
 There are two different syntaxes that can be used to define command expression placeholders, depending on which style of command section definition is used:
 
@@ -1864,7 +2002,7 @@ There are two different syntaxes that can be used to define command expression p
 | `command <<< >>>`        | `~{}` only                 |
 | `command { ... }`        | `~{}` (preferred) or `${}` |
 
-Note that the `~{}` and `${}` styles may be used interchangably in other string expressions.
+Note that the restriction on using `${}` only applies to the HEREDOC-style command section - it may be used interchangeably with `~{}` in string expressions including multi-line strings.
 
 Any valid WDL expression may be used within a placeholder. For example, a command might reference an input to the task, like this:
 
@@ -1919,43 +2057,6 @@ task test {
 ```
 
 Keep in mind that the command section is still subject to the rules of [string interpolation](#expression-placeholders-and-string-interpolation): ultimately, the value of the placeholder must be converted to a string. This is immediately possible for primitive values, but compound values must be somehow converted to primitive values. In some cases, this is not possible, and the only available mechanism is to write the complex output to a file. See the guide on [WDL value serialization](#appendix-a-wdl-value-serialization-and-deserialization) for details.
-
-#### Stripping Leading Whitespace
-
-When a command template is evaluate, the execution engine first strips out all *common leading whitespace*.
-
-For example, consider a task that calls the `python` interpreter with an in-line Python script:
-
-```wdl
-task heredoc {
-  input {
-    File infile
-  }
-
-  command<<<
-  python <<CODE
-    with open("~{in}") as fp:
-      for line in fp:
-        if not line.startswith('#'):
-          print(line.strip())
-  CODE
-  >>>
-  ....
-}
-```
-
-Given an `infile` value of `/path/to/file`, the execution engine will produce the following Bash script, which has removed the two spaces that were common to the beginning of each line:
-
-```sh
-python <<CODE
-  with open("/path/to/file") as fp:
-    for line in fp:
-      if not line.startswith('#'):
-        print(line.strip())
-CODE
-```
-
-If the user mixes tabs and spaces, the behavior is undefined. The execution engine should, at a minimum, issue a warning and leave the whitespace unmodified, though it may choose to raise an exception or to substitute e.g. 4 spaces per tab.
 
 ### Task Outputs
 
