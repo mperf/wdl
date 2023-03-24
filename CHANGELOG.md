@@ -42,6 +42,11 @@ version development
   consist of multiple files.
   [PR 241](https://github.com/openwdl/wdl/pull/241) by @cjllanwarne.
 
+version 1.1.1
+---------------------------
+
++ Added multiline strings.
+
 version 1.1.0
 ---------------------------
 
