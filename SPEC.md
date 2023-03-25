@@ -812,6 +812,7 @@ $expression = '!' $expression
 $expression = '+' $expression
 $expression = '-' $expression
 $expression = if $expression then $expression else $expression
+$expression = $expression '**' $expression
 $expression = $expression '*' $expression
 $expression = $expression '%' $expression
 $expression = $expression '/' $expression
@@ -877,6 +878,7 @@ In operations on mismatched numeric types (e.g. `Int` + `Float`), the `Int` type
 | `Int`       | `-`      | `Int`     | `Int`     |                                                          |
 | `Int`       | `*`      | `Int`     | `Int`     |                                                          |
 | `Int`       | `/`      | `Int`     | `Int`     | Integer division                                         |
+| `Int`       | `**`     | `Int`     | `Int`     | Integer exponentiation                                   |
 | `Int`       | `%`      | `Int`     | `Int`     | Integer division, return remainder                       |
 | `Int`       | `==`     | `Int`     | `Boolean` |                                                          |
 | `Int`       | `!=`     | `Int`     | `Boolean` |                                                          |
@@ -889,6 +891,7 @@ In operations on mismatched numeric types (e.g. `Int` + `Float`), the `Int` type
 | `Int`       | `-`      | `Float`   | `Float`   |                                                          |
 | `Int`       | `*`      | `Float`   | `Float`   |                                                          |
 | `Int`       | `/`      | `Float`   | `Float`   |                                                          |
+| `Int`       | `**`     | `Float`   | `Float`   |                                                          |
 | `Int`       | `==`     | `Float`   | `Boolean` |                                                          |
 | `Int`       | `!=`     | `Float`   | `Boolean` |                                                          |
 | `Int`       | `>`      | `Float`   | `Boolean` |                                                          |
@@ -899,6 +902,7 @@ In operations on mismatched numeric types (e.g. `Int` + `Float`), the `Int` type
 | `Float`     | `-`      | `Float`   | `Float`   |                                                          |
 | `Float`     | `*`      | `Float`   | `Float`   |                                                          |
 | `Float`     | `/`      | `Float`   | `Float`   |                                                          |
+| `Float`     | `**`     | `Float`   | `Float`   |                                                          |
 | `Float`     | `%`      | `Float`   | `Float`   |                                                          |
 | `Float`     | `==`     | `Float`   | `Boolean` |                                                          |
 | `Float`     | `!=`     | `Float`   | `Boolean` |                                                          |
@@ -911,6 +915,7 @@ In operations on mismatched numeric types (e.g. `Int` + `Float`), the `Int` type
 | `Float`     | `-`      | `Int`     | `Float`   |                                                          |
 | `Float`     | `*`      | `Int`     | `Float`   |                                                          |
 | `Float`     | `/`      | `Int`     | `Float`   |                                                          |
+| `Float`     | `**`     | `Int`     | `Float`   |                                                          |
 | `Float`     | `%`      | `Int`     | `Float`   |                                                          |
 | `Float`     | `==`     | `Int`     | `Boolean` |                                                          |
 | `Float`     | `!=`     | `Int`     | `Boolean` |                                                          |
@@ -1007,12 +1012,13 @@ Boolean is_false2 j == k
 
 | Precedence | Operator type         | Associativity | Example    |
 | ---------- | --------------------- | ------------- | ---------- |
-| 11         | Grouping              | n/a           | (x)        |
-| 10         | Member Access         | left-to-right | x.y        |
-| 9          | Index                 | left-to-right | x[y]       |
-| 8          | Function Call         | left-to-right | x(y,z,...) |
-| 7          | Logical NOT           | right-to-left | !x         |
+| 12         | Grouping              | n/a           | (x)        |
+| 11         | Member Access         | left-to-right | x.y        |
+| 10         | Index                 | left-to-right | x[y]       |
+| 9          | Function Call         | left-to-right | x(y,z,...) |
+| 8          | Logical NOT           | right-to-left | !x         |
 |            | Unary Negation        | right-to-left | -x         |
+| 7          | Exponentiation        | left-to-right | 2**4       |
 | 6          | Multiplication        | left-to-right | x*y        |
 |            | Division              | left-to-right | x/y        |
 |            | Remainder             | left-to-right | x%y        |
